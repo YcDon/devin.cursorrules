@@ -98,5 +98,8 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 - Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
 - When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
 - Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
+- Implement dual-agent approach: Use GPT-4 o1 for planning and Claude-3 for execution to optimize task handling
+- Configure o1 with reasoning_effort="low" for planning tasks
+- Use claude-3-sonnet-20240229 model for implementation tasks
 
 # Scratchpad
