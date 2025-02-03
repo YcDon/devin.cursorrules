@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 
-import argparse
 import os
+import sys
+import argparse
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
-import sys
 import time
-from .token_tracker import TokenUsage, APIResponse, get_token_tracker
+
+# Add the project root to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from tools import TokenUsage, APIResponse, get_token_tracker, query_llm
 
 STATUS_FILE = '.cursorrules'
 
@@ -63,18 +69,14 @@ def query_llm(plan_content, user_prompt=None, file_content=None):
     """Query the LLM with combined prompts"""
     client = create_llm_client()
     
-    # Combine prompts
-    system_prompt = """"""
-    
-    combined_prompt = f"""You are working on a multi-agent context. The executor is the one who actually does the work. And you are the planner. Now the executor is asking you for help. Please analyze the provided project plan and status, then address the executor's specific query or request.
+    # Combine prompts into a single user message
+    combined_prompt = """You are working on a multi-agent context. The executor is the one who actually does the work. And you are the planner. Now the executor is asking you for help. Please analyze the provided project plan and status, then address the executor's specific query or request.
 
 You need to think like a founder. Prioritize agility and don't over-engineer. Think deep. Try to foresee challenges and derisk earlier. If opportunity sizing or probing experiments can reduce risk with low cost, instruct the executor to do them.
     
 Project Plan and Status:
 ======
-{plan_content}
-======
-"""
+""" + plan_content + "\n======\n"
 
     if file_content:
         combined_prompt += f"\nFile Content:\n======\n{file_content}\n======\n"
@@ -96,41 +98,12 @@ We will do the actual changes in the .cursorrules file.
     try:
         start_time = time.time()
         response = client.chat.completions.create(
-            model="o1",
+            model="o1-preview",
             messages=[
-                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": combined_prompt}
             ],
-            response_format={"type": "text"},
-            reasoning_effort="low"
+            response_format={"type": "text"}
         )
-        thinking_time = time.time() - start_time
-        
-        # Track token usage
-        token_usage = TokenUsage(
-            prompt_tokens=response.usage.prompt_tokens,
-            completion_tokens=response.usage.completion_tokens,
-            total_tokens=response.usage.total_tokens,
-            reasoning_tokens=response.usage.completion_tokens_details.reasoning_tokens if hasattr(response.usage, 'completion_tokens_details') else None
-        )
-        
-        # Calculate cost
-        cost = get_token_tracker().calculate_openai_cost(
-            token_usage.prompt_tokens,
-            token_usage.completion_tokens,
-            "o1"
-        )
-        
-        # Track the request
-        api_response = APIResponse(
-            content=response.choices[0].message.content,
-            token_usage=token_usage,
-            cost=cost,
-            thinking_time=thinking_time,
-            provider="openai",
-            model="o1"
-        )
-        get_token_tracker().track_request(api_response)
         
         return response.choices[0].message.content
     except Exception as e:
@@ -138,9 +111,9 @@ We will do the actual changes in the .cursorrules file.
         return None
 
 def main():
-    parser = argparse.ArgumentParser(description='Query OpenAI o1 model with project plan context')
-    parser.add_argument('--prompt', type=str, help='Additional prompt to send to the LLM', required=False)
-    parser.add_argument('--file', type=str, help='Path to a file whose content should be included in the prompt', required=False)
+    parser = argparse.ArgumentParser(description='Plan and execute tasks using LLM')
+    parser.add_argument('--prompt', type=str, required=True, help='Prompt for the LLM')
+    parser.add_argument('--file', type=str, help='Optional file to include in analysis')
     args = parser.parse_args()
 
     # Load environment variables

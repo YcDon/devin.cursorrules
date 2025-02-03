@@ -127,34 +127,298 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 - When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
 - Use `gpt-4o` as the model name for OpenAI. It is the latest GPT model and has vision capabilities as well. `o1` is the most advanced and expensive model from OpenAI. Use it when you need to do reasoning, planning, or get blocked.
 - Use `claude-3-5-sonnet-20241022` as the model name for Claude. It is the latest Claude model and has vision capabilities as well.
+- For multi-agent system: Use `o1-preview` for Planner (via OpenAI API) and Claude-3.5 (via Cursor Pro) for Executor - no separate Anthropic API key needed when using Cursor Pro.
+
+## OpenAI Fine-tuning Lessons
+
+### DPO (Direct Preference Optimization) Fine-tuning Setup
+
+1. Data Format:
+   - Use JSONL format with each line containing:
+     ```json
+     {
+       "input": {
+         "messages": [
+           {"role": "system", "content": "system message"},
+           {"role": "user", "content": "user message"}
+         ]
+       },
+       "preferred_output": [
+         {"role": "assistant", "content": "preferred response"}
+       ],
+       "non_preferred_output": [
+         {"role": "assistant", "content": "non-preferred response"}
+       ]
+     }
+     ```
+
+2. API Parameters:
+   - Model: Use `gpt-4o-2024-08-06` (or latest version)
+   - Method: Must specify DPO method correctly:
+     ```python
+     method={
+         "type": "dpo"  # This is the correct way to enable DPO
+     }
+     ```
+   - File purpose must be 'fine-tune' when uploading
+
+3. Implementation:
+   ```python
+   def create_finetune_job(client: OpenAI, training_file_id: str) -> str:
+       response = client.fine_tuning.jobs.create(
+           training_file=training_file_id,
+           model="gpt-4o-2024-08-06",
+           method={
+               "type": "dpo"
+           }
+       )
+       return response.id
+   ```
+
+4. Common Issues Fixed:
+   - Don't put DPO settings in `hyperparameters` (deprecated)
+   - Don't use `training_method` parameter (not supported)
+   - Make sure data format matches DPO requirements exactly
+   - File must be uploaded with purpose='fine-tune'
+
+5. Monitoring:
+   - Use `client.fine_tuning.jobs.retrieve(job_id)` to check status
+   - Use `client.fine_tuning.jobs.list_events(job_id)` for detailed progress
+   - Use `client.fine_tuning.jobs.cancel(job_id)` to stop a job
+   - Monitor progress in OpenAI console for visual feedback
 
 # Multi-Agent Scratchpad
 
 ## Background and Motivation
 
-(Planner writes: User/business requirements, macro objectives, why this problem needs to be solved)
+Project Goal: Fine-tune GPT-4o model programmatically for multiple objectives:
+1. Tone preferences (concise, complying, sensational)
+2. Tool calling capabilities enhancement
+3. Sales conversion optimization through multi-turn conversation handling
+
+Key Requirements:
+- Implementation must be programmatic (not using web UI console)
+- Need to handle multiple training objectives simultaneously
+- Focus on practical implementation and validation
+- Must ensure efficient use of API resources given the complexity
+
 The executor has access to three tools: invoking 3rd party LLM, invoking web browser, invoking search engine.
 
 ## Key Challenges and Analysis
 
-(Planner: Records of technical barriers, resource constraints, potential risks)
+1. Model Selection and Capabilities
+   - Available models for fine-tuning:
+     * `gpt-4o-2024-08-06` and `gpt-4o-mini-2024-07-18` (recommended for most users)
+     * Both support 128K tokens context length (65,536 for training currently)
+   - Can fine-tune a fine-tuned model for iterative improvements
+   - Need to consider token limits and cost implications
+
+2. Data Format Requirements
+   - Must use chat format with messages array
+   - Each example must include role (system, user, assistant)
+   - Minimum 10 examples required, recommended 50-100 for clear improvements
+   - Support for multi-turn conversations with weight parameter
+   - Need to handle token limits (65,536 tokens per training example)
+
+3. Multi-Objective Strategy
+   - **Adopt an Integrated Data Approach to Handle Multiple Objectives Simultaneously**
+     - Design training examples that incorporate all three objectives within the same conversation
+       * Create dialogues where tone preferences, tool calling, and sales conversion tactics are applied together
+     - Ensure that the model learns to balance and prioritize multiple directives based on context
+   - **Data Structuring and Annotation**
+     - Develop an annotation schema to label each aspect of the objectives within the data
+       * Use metadata or in-line annotations to indicate desired tone, tool usage, and sales strategies
+     - Facilitate easier parsing and adjustment of data for hyperparameter tuning
+   - **Leverage Multi-Turn Conversations**
+     - Utilize complex, realistic dialogues that mimic real-world interactions
+     - Capture scenarios where the assistant must seamlessly switch tones, invoke tools, and employ sales techniques
+   - **Progressive Complexity and Curriculum Learning**
+     - Start with examples focusing on individual objectives
+     - Gradually introduce combined-objective examples to help the model build on learned behaviors
+   - **Train/Test Split for Multi-Objective Data**
+     - Ensure the split maintains a balanced representation of all objectives
+     - Validate that the test set effectively evaluates the model's performance across combined objectives
+
+4. Cost and Resource Management
+   - Training cost formula: (base cost per 1M tokens ÷ 1M) × input tokens × epochs
+   - Can optimize costs by:
+     * Using `gpt-4o-mini` instead of full `gpt-4o`
+     * Careful management of training epochs
+     * Efficient token usage in examples
+   - Need to consider both training and inference costs
 
 ## Verifiable Success Criteria
 
-(Planner: List measurable or verifiable goals to be achieved)
+1. Tone Adaptation Success:
+   - Model consistently produces output in specified tones (concise/complying/sensational)
+   - 90%+ accuracy in blind testing for tone adherence
+   - Maintains coherence and context while adapting tone
+
+2. Tool Calling Capabilities:
+   - 95%+ accuracy in function calling syntax
+   - Correct parameter usage in 90%+ of cases
+   - Appropriate tool selection in 85%+ of scenarios
+
+3. Sales Conversion Optimization:
+   - Demonstrable improvement in conversion rates (target: +20%)
+   - Maintains natural conversation flow
+   - Successfully handles common objections
+   - Appropriate use of sales techniques
+
+4. Technical Implementation:
+   - Zero critical failures in production deployment
+   - API usage within allocated budget
+   - Response times within acceptable ranges
+   - Successful logging and monitoring implementation
+
+5. Data Quality Metrics:
+   - Minimum 50 examples per objective
+   - Clear train/test split for validation
+   - Token count within 65,536 limit per example
+   - Consistent formatting across all examples
+
+6. Cost Efficiency:
+   - Training cost within budget (calculate using provided formula)
+   - Inference cost competitive with base model
+   - Optimal use of tokens in training data
 
 ## High-level Task Breakdown
 
-(Planner: List subtasks by phase, or break down into modules)
+Phase 1: Setup and Infrastructure
+1. Environment setup and API configuration
+2. Development of data processing pipeline
+3. Implementation of monitoring and logging
+
+Phase 2: Data Preparation
+1. Training data collection for each objective
+2. Data cleaning and validation
+3. Format standardization
+4. Quality assurance checks
+
+Phase 3: Fine-tuning Implementation
+1. Initial model training setup
+2. Iterative fine-tuning process
+3. Progress tracking and model versioning
+4. Performance optimization
+
+Phase 4: Testing and Validation
+1. Test suite development
+2. Comprehensive testing across all objectives
+3. Performance metrics collection
+4. Refinement based on results
+
+Phase 5: Deployment and Monitoring
+1. Production deployment setup
+2. Monitoring system implementation
+3. Performance tracking
+4. Continuous improvement process
 
 ## Current Status / Progress Tracking
 
-(Executor: Update completion status after each subtask. If needed, use bullet points or tables to show Done/In progress/Blocked status)
+Phase 1: Setup and Infrastructure
+- ✓ Environment setup completed
+  * Virtual environment created and activated
+  * Core dependencies installed
+  * OpenAI API key configured
+
+- ✓ Initial fine-tuning module created (`tools/fine_tune_utils.py`)
+  * Dataset management classes implemented
+  * Job management functionality implemented
+  * Basic evaluation framework in place
+
+Next Steps in Progress:
+1. Implement evaluation metrics for each objective:
+   - Tone consistency evaluation
+   - Tool calling accuracy assessment
+   - Sales conversion effectiveness measurement
+
+2. Create data collection and preparation pipeline:
+   - Define data formats for each objective
+   - Implement data validation rules
+   - Set up data preprocessing functions
+
+3. Set up monitoring and logging:
+   - Integration with existing token tracking
+   - Job status monitoring
+   - Cost tracking and optimization
 
 ## Next Steps and Action Items
 
-(Planner: Specific arrangements for the Executor)
+1. Data Preparation (Immediate Priority)
+   - **Develop a Unified Dataset that Combines All Objectives**
+     - Collect or create conversation examples that simultaneously address tone preferences, tool calling, and sales conversion optimization
+     - Aim for at least 50 comprehensive examples that encapsulate multiple objectives
+   - **Implement a Robust Annotation Schema**
+     - Label each example with metadata for:
+       * Desired tone (e.g., concise, complying, sensational)
+       * Required tool calls and correct usage
+       * Sales strategies employed (e.g., objection handling, closing techniques)
+     - This will assist in targeted evaluation and future data adjustments
+   - **Format Examples According to OpenAI Chat Completion Format**
+     - Ensure each example correctly uses the 'messages' array with roles (system, user, assistant)
+     - Incorporate system prompts that set context for multiple objectives
+   - **Implement Train/Test Split (80/20)**
+     - Split the unified dataset while maintaining the distribution of combined objectives
+     - Verify that both sets contain a representative mix of tones, tool usage, and sales strategies
+   - **Validate Token Counts and Formatting**
+     - Use `tiktoken` to ensure each example is within the 65,536 token limit
+     - Perform formatting checks to maintain consistency and adherence to OpenAI's requirements
+
+2. Fine-tuning Pipeline Updates
+   - Modify `fine_tune_utils.py` to support:
+     * Proper JSONL formatting
+     * Token count validation
+     * Cost estimation
+     * Train/test split functionality
+
+3. Testing Framework
+   - Implement evaluation using OpenAI's recommended metrics
+   - Set up Weights & Biases integration for tracking
+   - Create automated validation pipeline
+
+Next Immediate Tasks for Executor:
+1. Update `fine_tune_utils.py` to match OpenAI's requirements:
+   - JSONL file format handling
+   - Token count validation
+   - Cost estimation functions
+2. Create data preparation pipeline
+3. Set up evaluation framework
 
 ## Executor's Feedback or Assistance Requests
 
-(Executor: Write here when encountering blockers, questions, or need for more information during execution)
+Current Status:
+1. Implemented comprehensive fine-tuning utilities in `fine_tune_utils.py`:
+   - Added token counting using `tiktoken`
+   - Implemented cost estimation based on token count and model type
+   - Created unified dataset preparation with train/test split
+   - Added proper JSONL formatting according to OpenAI's requirements
+   - Implemented hyperparameter support
+   - Added CLI interface for all operations
+
+2. Key Features Added:
+   - Token counting and validation (65,536 token limit per example)
+   - Cost estimation based on model type (gpt-4o-mini vs full gpt-4o)
+   - Train/test dataset split with proper formatting
+   - Comprehensive metrics tracking
+   - Support for custom system prompts
+   - CLI interface for prepare/train/status/evaluate operations
+
+3. Implementation Details:
+   - Using `tiktoken` for accurate token counting
+   - Supporting both gpt-4o-mini and full gpt-4o models
+   - Proper JSONL formatting with messages array
+   - Integration with token_tracker for usage monitoring
+   - Automated cost estimation based on token count and epochs
+
+Current Blockers:
+1. Need to verify token counting accuracy with actual OpenAI API
+2. Need to confirm current pricing for fine-tuning (used placeholder values)
+3. Need to test the hyperparameter configuration options
+4. Need to verify the metrics format matches OpenAI's actual response
+
+Requested Actions from Planner:
+1. Review the token counting implementation and confirm if it matches OpenAI's counting method
+2. Provide guidance on optimal hyperparameter settings for each objective
+3. Confirm if the current metrics structure matches OpenAI's actual response format
+4. Advise on best practices for system prompts for each objective (tone, tool_calling, sales)
+5. Suggest appropriate train/test split ratio for different dataset sizes

@@ -104,8 +104,8 @@ class TokenTracker:
     @staticmethod
     def calculate_openai_cost(prompt_tokens: int, completion_tokens: int, model: str) -> float:
         """Calculate OpenAI API cost based on model and token usage"""
-        # Only support o1, gpt-4o, and deepseek-chat models
-        if model == "o1":
+        # Support o1, o1-preview, gpt-4o, and deepseek-chat models
+        if model in ["o1", "o1-preview"]:
             # o1 pricing per 1M tokens
             INPUT_PRICE_PER_M = 15.0
             OUTPUT_PRICE_PER_M = 60.0
@@ -118,7 +118,7 @@ class TokenTracker:
             INPUT_PRICE_PER_M = 0.2  # $0.20 per million input tokens
             OUTPUT_PRICE_PER_M = 0.2  # $0.20 per million output tokens
         else:
-            raise ValueError(f"Unsupported OpenAI model for cost calculation: {model}. Only o1, gpt-4o, and deepseek-chat are supported.")
+            raise ValueError(f"Unsupported OpenAI model for cost calculation: {model}. Only o1, o1-preview, gpt-4o, and deepseek-chat are supported.")
         
         input_cost = (prompt_tokens / 1_000_000) * INPUT_PRICE_PER_M
         output_cost = (completion_tokens / 1_000_000) * OUTPUT_PRICE_PER_M
